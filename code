@@ -1,0 +1,90 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import zipfile
+import io
+
+# Function to load Kaggle dataset from zip file
+def load_data_from_zip(zip_path):
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        file_name = z.namelist()[0]
+        with z.open(file_name) as f:
+            data = pd.read_csv(f, parse_dates=['date'])
+    data.rename(columns={
+        'date': 'Date',
+        'open': 'Open',
+        'high': 'High',
+        'low': 'Low',
+        'close': 'Close',
+        'volume': 'Volume',
+        'Name': 'Stock Symbol'
+    }, inplace=True)
+    return data
+
+# Function to filter data by stock symbol and date range
+def filter_data(data, stock_symbol, start_date, end_date):
+    filtered = data[(data['Stock Symbol'] == stock_symbol) &
+                    (data['Date'] >= pd.to_datetime(start_date)) & (data['Date'] <= pd.to_datetime(end_date))]
+    return filtered.copy()
+
+# Function to calculate moving averages
+def moving_averages(data, windows=[20, 50, 100]):
+    data = data.copy()
+    for window in windows:
+        data[f"MA_{window}"] = data['Close'].rolling(window=window).mean()
+    return data
+
+# Function to calculate daily returns and volatility
+def daily_returns_volatility(data):
+    data = data.copy()
+    data['Daily Return'] = data['Close'].pct_change()
+    volatility = data['Daily Return'].std()
+    return data, volatility
+
+# Function to plot stock closing price with moving averages
+def plot_stock(data, stock_symbol):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name='Close Price'))
+    for col in data.columns:
+        if 'MA_' in col:
+            fig.add_trace(go.Scatter(x=data['Date'], y=data[col], name=col))
+    fig.update_layout(title=f'{stock_symbol} Stock Price and Moving Averages',
+                      xaxis_title='Date',
+                      yaxis_title='Price')
+    fig.show()
+
+# Function to plot daily returns
+def plot_daily_returns(data, stock_symbol):
+    plt.figure(figsize=(10, 6))
+    plt.plot(data['Date'], data['Daily Return'])
+    plt.title(f'{stock_symbol} Daily Returns')
+    plt.xlabel('Date')
+    plt.ylabel('Daily Return')
+    plt.grid(True)
+    plt.show()
+
+# Main program
+if __name__ == "__main__":
+    zip_file_path = "/Users/maggienaeger/Desktop/all_stocks_5yr.csv.zip"
+    data = load_data_from_zip(zip_file_path)
+
+    print("Available stock symbols:")
+    print(sorted(data['Stock Symbol'].unique()))
+
+    stock_symbol = input("Enter the stock symbol you want to analyze: ").strip().upper()
+    start_date = input("Enter start date (YYYY-MM-DD): ").strip()
+    end_date = input("Enter end date (YYYY-MM-DD): ").strip()
+
+    if pd.to_datetime(start_date) > pd.to_datetime(end_date):
+        print("Error: Start date must be before end date.")
+    else:
+        stock_data = filter_data(data, stock_symbol, start_date, end_date)
+        stock_data = moving_averages(stock_data)
+        stock_data, volatility = daily_returns_volatility(stock_data)
+
+        print(f"\nAnalysis for {stock_symbol}:")
+        print(f"Volatility (Standard Deviation of Daily Returns): {volatility:.4f}")
+
+        plot_stock(stock_data, stock_symbol)
+        plot_daily_returns(stock_data, stock_symbol)
